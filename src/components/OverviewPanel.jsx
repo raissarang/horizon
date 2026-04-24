@@ -43,7 +43,7 @@ const RABtn = ({ onClick, danger, children }) => {
   )
 }
 
-export default function OverviewPanel({ projects, setProjects, onDeleteProject }) {
+export default function OverviewPanel({ projects, setProjects, onDeleteProject, onUpsertProject }) {
   const [drawerOpen, setDrawerOpen]   = useState(false)
   const [editProject, setEditProject] = useState(null)
   const [deletingId, setDeletingId]   = useState(null)
@@ -61,10 +61,14 @@ export default function OverviewPanel({ projects, setProjects, onDeleteProject }
 
   const handleSave = (data) => {
     if (editProject) {
-      setProjects(prev => prev.map(p => p.id === editProject.id ? { ...p, ...data, subtasks: p.subtasks || [] } : p))
+      const updatedProject = { ...editProject, ...data, subtasks: editProject.subtasks || [] }
+      setProjects(prev => prev.map(p => p.id === editProject.id ? updatedProject : p))
+      if (onUpsertProject) onUpsertProject(updatedProject)
     } else {
       const color = COLORS_POOL[projects.length % COLORS_POOL.length]
-      setProjects(prev => [...prev, { id: Date.now(), color, subtasks: [], ...data }])
+      const newProject = { id: Date.now(), color, subtasks: [], ...data }
+      setProjects(prev => [...prev, newProject])
+      if (onUpsertProject) onUpsertProject(newProject)
     }
     closeDrawer()
   }

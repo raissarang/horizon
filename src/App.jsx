@@ -1,15 +1,106 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import Sidebar from './components/Sidebar.jsx'
 import OverviewPanel from './components/OverviewPanel.jsx'
 import CampaignsPanel from './components/CampaignsPanel.jsx'
 import { TimelinePanel, CalendarPanel, TrashPanel } from './components/Panels.jsx'
 import ChatDrawer from './components/ChatDrawer.jsx'
 import { useLiveData } from './liveData.js'
+import { INITIAL_PROJECTS } from './data.js'
+import { supabase } from './supabase.js'
 
 export default function App() {
+  const expectedPassword = import.meta.env.VITE_APP_PASSWORD || ''
+  const [passwordInput, setPasswordInput] = useState('')
+  const [authError, setAuthError] = useState('')
+  const [isAuthenticated, setIsAuthenticated] = useState(false)
   const [view, setView]         = useState('overview')
   const [chatOpen, setChatOpen] = useState(false)
   const { data, setData, error, lastSync } = useLiveData()
+
+  useEffect(() => {
+    const saved = sessionStorage.getItem('horizon-authenticated') === 'true'
+    if (saved) setIsAuthenticated(true)
+  }, [])
+
+  const mapProjectToDb = (project, overrides = {}) => ({
+    id: project.id,
+    name: project.name,
+    color: project.color,
+    status: project.status,
+    prog: project.prog,
+    next: project.next,
+    due: project.due,
+    subtasks: project.subtasks || [],
+    deleted: false,
+    deleted_by: null,
+    deleted_at: null,
+    ...overrides,
+  })
+
+  const mapDbRowToProject = (row) => ({
+    id: row.id,
+    name: row.name,
+    color: row.color,
+    status: row.status,
+    prog: Number.isFinite(row.prog) ? row.prog : 0,
+    next: row.next || '',
+    due: row.due || 'TBD',
+    subtasks: Array.isArray(row.subtasks) ? row.subtasks : [],
+  })
+
+  const mapDbRowToTrashEntry = (row) => ({
+    id: row.id,
+    deletedAt: row.deleted_at || new Date().toISOString(),
+    deletedBy: row.deleted_by || 'api',
+    project: mapDbRowToProject(row),
+  })
+
+  const loadProjectsFromSupabase = async () => {
+    if (!supabase) return
+
+    const [{ data: activeRows, error: activeError }, { data: trashRows, error: trashError }] = await Promise.all([
+      supabase.from('projects').select('*').eq('deleted', false).order('id', { ascending: true }),
+      supabase.from('projects').select('*').eq('deleted', true).order('deleted_at', { ascending: false }),
+    ])
+
+    if (activeError || trashError) return
+
+    const activeProjects = Array.isArray(activeRows) && activeRows.length > 0
+      ? activeRows.map(mapDbRowToProject)
+      : INITIAL_PROJECTS
+
+    setData((prev) => ({
+      ...prev,
+      projects: activeProjects,
+      deletedProjects: Array.isArray(trashRows) ? trashRows.map(mapDbRowToTrashEntry) : [],
+    }))
+  }
+
+  useEffect(() => {
+    loadProjectsFromSupabase()
+  }, [])
+
+  useEffect(() => {
+    if (!supabase || !Array.isArray(data.projects) || data.projects.length === 0) return
+    const payload = data.projects.map((project) => mapProjectToDb(project))
+    supabase.from('projects').upsert(payload, { onConflict: 'id' })
+  }, [data.projects])
+
+  const handleLogin = () => {
+    if (!expectedPassword) {
+      setAuthError('Password is not configured')
+      return
+    }
+
+    if (passwordInput === expectedPassword) {
+      sessionStorage.setItem('horizon-authenticated', 'true')
+      setIsAuthenticated(true)
+      setAuthError('')
+      return
+    }
+
+    setAuthError('Incorrect password')
+  }
 
   const setProjects = (updater) => {
     setData((prev) => ({
@@ -25,7 +116,23 @@ export default function App() {
     }))
   }
 
-  const handleDeleteProject = (project, deletedBy = 'user') => {
+  const handleUpsertProject = async (project) => {
+    if (!supabase || !project) return
+    await supabase.from('projects').upsert([mapProjectToDb(project)], { onConflict: 'id' })
+  }
+
+  const handleDeleteProject = async (project, deletedBy = 'user') => {
+    if (supabase) {
+      await supabase
+        .from('projects')
+        .upsert(
+          [mapProjectToDb(project, { deleted: true, deleted_by: deletedBy, deleted_at: new Date().toISOString() })],
+          { onConflict: 'id' },
+        )
+      await loadProjectsFromSupabase()
+      return
+    }
+
     setData((prev) => ({
       ...prev,
       projects: prev.projects.filter((p) => p.id !== project.id),
@@ -41,7 +148,16 @@ export default function App() {
     }))
   }
 
-  const handleRestoreProject = (trashEntryId) => {
+  const handleRestoreProject = async (trashEntryId) => {
+    if (supabase) {
+      await supabase
+        .from('projects')
+        .update({ deleted: false, deleted_by: null, deleted_at: null })
+        .eq('id', trashEntryId)
+      await loadProjectsFromSupabase()
+      return
+    }
+
     setData((prev) => {
       const entry = (prev.deletedProjects || []).find((item) => item.id === trashEntryId)
       if (!entry) return prev
@@ -55,17 +171,96 @@ export default function App() {
 
   const handleEmptyTrash = () => {
     if (!window.confirm('Permanently delete all items in Trash? This cannot be undone.')) return
+    if (supabase) {
+      supabase.from('projects').delete().eq('deleted', true).then(() => loadProjectsFromSupabase())
+      return
+    }
     setData((prev) => ({ ...prev, deletedProjects: [] }))
   }
 
   const nowLabel = new Date().toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })
 
   const panels = {
-    overview:  <OverviewPanel projects={data.projects} setProjects={setProjects} onDeleteProject={handleDeleteProject} />,
+    overview:  <OverviewPanel projects={data.projects} setProjects={setProjects} onDeleteProject={handleDeleteProject} onUpsertProject={handleUpsertProject} />,
     campaigns: <CampaignsPanel campaigns={data.campaigns} setCampaigns={setCampaigns} onConfirm={() => setView('overview')} />,
     timeline:  <TimelinePanel rows={data.timelineRows} />,
     calendar:  <CalendarPanel events={data.calendarEvents} />,
     trash: <TrashPanel deletedProjects={data.deletedProjects} onRestoreProject={handleRestoreProject} onEmptyTrash={handleEmptyTrash} />,
+  }
+
+  if (!isAuthenticated) {
+    return (
+      <div style={{
+        height: '100vh',
+        width: '100vw',
+        background: 'var(--bg3)',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        padding: 20,
+      }}>
+        <div style={{
+          width: '100%',
+          maxWidth: 380,
+          borderRadius: 12,
+          border: '0.5px solid var(--bd2)',
+          background: 'var(--bg)',
+          padding: 24,
+          boxShadow: '0 20px 40px rgba(0,0,0,0.12)',
+        }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 18 }}>
+            <div style={{ width: 10, height: 10, borderRadius: '50%', background: 'var(--blue)', boxShadow: '0 0 0 4px var(--bluebg)' }} />
+            <div style={{ fontSize: 16, fontWeight: 600, color: 'var(--tx)' }}>Horizon</div>
+          </div>
+
+          <div style={{ fontSize: 12, color: 'var(--tx2)', marginBottom: 8 }}>Enter password to continue</div>
+          <input
+            type="password"
+            value={passwordInput}
+            onChange={(e) => {
+              setPasswordInput(e.target.value)
+              if (authError) setAuthError('')
+            }}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') handleLogin()
+            }}
+            style={{
+              width: '100%',
+              padding: '9px 10px',
+              borderRadius: 8,
+              border: '0.5px solid var(--bd2)',
+              background: 'var(--bg2)',
+              color: 'var(--tx)',
+              fontSize: 13,
+              fontFamily: 'inherit',
+              outline: 'none',
+            }}
+          />
+          {authError && (
+            <div style={{ marginTop: 6, fontSize: 11.5, color: 'var(--red)' }}>{authError}</div>
+          )}
+
+          <button
+            onClick={handleLogin}
+            style={{
+              marginTop: 14,
+              width: '100%',
+              border: 'none',
+              borderRadius: 8,
+              padding: '9px 10px',
+              fontSize: 13,
+              fontWeight: 500,
+              background: 'var(--blue)',
+              color: '#fff',
+              cursor: 'pointer',
+              fontFamily: 'inherit',
+            }}
+          >
+            Login
+          </button>
+        </div>
+      </div>
+    )
   }
 
   return (
