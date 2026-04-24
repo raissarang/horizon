@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useRef } from 'react'
 import Sidebar from './components/Sidebar.jsx'
 import OverviewPanel from './components/OverviewPanel.jsx'
 import CampaignsPanel from './components/CampaignsPanel.jsx'
@@ -16,6 +16,7 @@ export default function App() {
   const [view, setView]         = useState('overview')
   const [chatOpen, setChatOpen] = useState(false)
   const { data, setData, error, lastSync } = useLiveData()
+  const initialLoadDone = useRef(false)
 
   useEffect(() => {
     const saved = sessionStorage.getItem('horizon-authenticated') === 'true'
@@ -65,26 +66,29 @@ export default function App() {
 
     if (activeError || trashError) return
 
-    const activeProjects = Array.isArray(activeRows) && activeRows.length > 0
-      ? activeRows.map(mapDbRowToProject)
-      : INITIAL_PROJECTS
+    // If no active projects in Supabase yet, seed with INITIAL_PROJECTS
+    if (!activeRows || activeRows.length === 0) {
+      const seedPayload = INITIAL_PROJECTS.map((p) => mapProjectToDb(p))
+      await supabase.from('projects').upsert(seedPayload, { onConflict: 'id' })
+      setData((prev) => ({
+        ...prev,
+        projects: INITIAL_PROJECTS,
+        deletedProjects: [],
+      }))
+    } else {
+      setData((prev) => ({
+        ...prev,
+        projects: activeRows.map(mapDbRowToProject),
+        deletedProjects: Array.isArray(trashRows) ? trashRows.map(mapDbRowToTrashEntry) : [],
+      }))
+    }
 
-    setData((prev) => ({
-      ...prev,
-      projects: activeProjects,
-      deletedProjects: Array.isArray(trashRows) ? trashRows.map(mapDbRowToTrashEntry) : [],
-    }))
+    initialLoadDone.current = true
   }
 
   useEffect(() => {
     loadProjectsFromSupabase()
   }, [])
-
-  useEffect(() => {
-    if (!supabase || !Array.isArray(data.projects) || data.projects.length === 0) return
-    const payload = data.projects.map((project) => mapProjectToDb(project))
-    supabase.from('projects').upsert(payload, { onConflict: 'id' })
-  }, [data.projects])
 
   const handleLogin = () => {
     if (!expectedPassword) {
