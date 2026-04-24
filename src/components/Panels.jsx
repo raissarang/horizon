@@ -90,3 +90,72 @@ export function CalendarPanel({ events = CALENDAR_EVENTS }) {
     </div>
   )
 }
+
+export function TrashPanel({ deletedProjects = [], onRestoreProject, onEmptyTrash }) {
+  return (
+    <div>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
+        <div style={{ fontSize: 13, fontWeight: 500 }}>Trash</div>
+        <button
+          onClick={onEmptyTrash}
+          disabled={deletedProjects.length === 0}
+          style={{
+            border: '0.5px solid var(--bd2)',
+            borderRadius: 6,
+            padding: '5px 10px',
+            background: deletedProjects.length === 0 ? 'var(--bg2)' : 'var(--redbg)',
+            color: deletedProjects.length === 0 ? 'var(--tx3)' : 'var(--red)',
+            fontSize: 12,
+            cursor: deletedProjects.length === 0 ? 'not-allowed' : 'pointer',
+            fontFamily: 'inherit',
+          }}
+        >
+          Empty Trash
+        </button>
+      </div>
+
+      {deletedProjects.length === 0 && (
+        <div style={{ fontSize: 12, color: 'var(--tx3)' }}>Trash is empty.</div>
+      )}
+
+      {deletedProjects.map((entry) => (
+        <div
+          key={entry.id}
+          style={{
+            border: '0.5px solid var(--bd)',
+            borderRadius: 10,
+            padding: 12,
+            marginBottom: 8,
+            background: 'var(--bg2)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            gap: 12,
+          }}
+        >
+          <div>
+            <div style={{ fontSize: 12.5, fontWeight: 500 }}>{entry.project?.name || 'Untitled project'}</div>
+            <div style={{ fontSize: 11.5, color: 'var(--tx3)', marginTop: 2 }}>
+              Deleted {new Date(entry.deletedAt).toLocaleString()} by {entry.deletedBy}
+            </div>
+          </div>
+          <button
+            onClick={() => onRestoreProject(entry.id)}
+            style={{
+              border: '0.5px solid var(--bd2)',
+              borderRadius: 6,
+              padding: '5px 10px',
+              background: 'var(--bg)',
+              color: 'var(--tx2)',
+              fontSize: 12,
+              cursor: 'pointer',
+              fontFamily: 'inherit',
+            }}
+          >
+            Restore
+          </button>
+        </div>
+      ))}
+    </div>
+  )
+}

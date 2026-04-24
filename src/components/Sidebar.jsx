@@ -37,10 +37,11 @@ const ITEMS = [
   { label: 'Campaigns', dot: '#3B6D11', view: 'campaigns' },
   { label: 'Timeline', dot: '#534AB7', view: 'timeline' },
   { label: 'Calendar', dot: '#0F6E56', view: 'calendar' },
+  { label: 'Trash', dot: '#888780', view: 'trash' },
   { label: 'Urgent', dot: '#A32D2D', view: 'overview', badge: '3' },
 ]
 
-export default function Sidebar({ view, setView }) {
+export default function Sidebar({ view, setView, trashCount = 0 }) {
   const [open, setOpen] = useState(true)
   const [active, setActive] = useState('Dashboard')
 
@@ -60,6 +61,9 @@ export default function Sidebar({ view, setView }) {
       <div style={s.nav}>
         <div style={s.list}>
           {ITEMS.map(item => (
+            (() => {
+              const badge = item.view === 'trash' ? (trashCount > 0 ? String(trashCount) : '') : item.badge
+              return (
             <button
               key={item.label}
               style={s.item(active === item.label)}
@@ -69,8 +73,10 @@ export default function Sidebar({ view, setView }) {
             >
               <div style={s.dot(item.dot)} />
               {open && <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', flex: 1 }}>{item.label}</span>}
-              {open && item.badge && <span style={s.badge}>{item.badge}</span>}
+              {open && badge && <span style={s.badge}>{badge}</span>}
             </button>
+              )
+            })()
           ))}
         </div>
       </div>

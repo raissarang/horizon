@@ -6,6 +6,8 @@ const TASK_STATUS = {
   'in-progress': { label: 'In progress', color: 'blue' },
   done: { label: 'Done', color: 'green' },
   blocked: { label: 'Blocked', color: 'red' },
+  backlog: { label: 'Backlog', color: 'amber' },
+  postponed: { label: 'Postponed', color: 'gray' },
 }
 
 function TaskReadOnlyRow({ task }) {

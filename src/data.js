@@ -1,38 +1,34 @@
 export const INITIAL_PROJECTS = [
-  { id: 1,  name: 'Airbnb campaign',         color: '#185FA5', status: 'in-progress', prog: 70, next: 'Schedule newsletter + TL', due: 'Apr 13' },
-  { id: 2,  name: 'Crexi whitepaper',         color: '#3B6D11', status: 'published',   prog: 90, next: 'Jonas quote design',        due: 'Done' },
-  { id: 3,  name: 'Purrrmitted Living',        color: '#854F0B', status: 'planning',    prog: 15, next: 'Define strategy + messaging', due: 'TBD' },
-  { id: 4,  name: "Data's User Journey",       color: '#534AB7', status: 'planning',    prog: 10, next: 'Create monthly themes',      due: 'TBD' },
+  { id: 1,  name: 'Airbnb campaign',         color: '#185FA5', status: 'in-progress', prog: 67, next: 'Schedule newsletter + TL', due: 'Apr 13', subtasks: [{ id: 1, title: 'Finalize copy deck', status: 'done' }, { id: 2, title: 'Approve CTA links', status: 'done' }, { id: 3, title: 'Schedule send', status: 'todo' }] },
+  { id: 2,  name: 'Crexi whitepaper',         color: '#3B6D11', status: 'done',        prog: 100, next: 'Jonas quote design',        due: 'Done', subtasks: [{ id: 1, title: 'Publish landing page', status: 'done' }, { id: 2, title: 'Send newsletter mention', status: 'done' }] },
+  { id: 3,  name: 'Purrrmitted Living',       color: '#854F0B', status: 'todo',        prog: 15, next: 'Define strategy + messaging', due: 'TBD' },
+  { id: 4,  name: "Data's User Journey",      color: '#534AB7', status: 'backlog',     prog: 10, next: 'Create monthly themes',      due: 'TBD' },
   { id: 5,  name: 'Data release automation',   color: '#0F6E56', status: 'in-progress', prog: 75, next: 'Blog distribution module',   due: 'This week' },
   { id: 6,  name: 'RevOps / HubSpot',          color: '#993C1D', status: 'in-progress', prog: 60, next: 'Lead scoring review',        due: 'Ongoing' },
   { id: 7,  name: 'Website v2',                color: '#888780', status: 'postponed',   prog: 30, next: 'Logos + testimonials',       due: 'Apr (delayed)' },
   { id: 8,  name: 'Google Ads',                color: '#E24B4A', status: 'blocked',     prog: 20, next: 'Set up GTM tag',             due: 'Overdue' },
-  { id: 9,  name: 'Newsroom update',           color: '#378ADD', status: 'overdue',     prog: 40, next: 'Add Crexi, Airbnb, Dewey',   due: 'Apr 6' },
-  { id: 10, name: 'Email marketing',           color: '#639922', status: 'scheduled',   prog: 85, next: 'Schedule newsletter + TL',  due: 'Apr 13' },
+  { id: 9,  name: 'Newsroom update',           color: '#378ADD', status: 'blocked',     prog: 40, next: 'Add Crexi, Airbnb, Dewey',   due: 'Apr 6' },
+  { id: 10, name: 'Email marketing',           color: '#639922', status: 'todo',        prog: 85, next: 'Schedule newsletter + TL',   due: 'Apr 13' },
 ]
 
 export const STATUSES = {
+  todo:          'To do',
   'in-progress': 'In progress',
-  published:     'Published',
-  planning:      'Planning',
-  postponed:     'Postponed',
-  blocked:       'Blocked',
-  overdue:       'Overdue',
-  scheduled:     'Scheduled',
   done:          'Done',
+  blocked:       'Blocked',
+  backlog:       'Backlog',
+  postponed:     'Postponed',
 }
 
-export const STATUS_ORDER = ['planning','in-progress','scheduled','published','done','blocked','postponed','overdue']
+export const STATUS_ORDER = ['todo', 'in-progress', 'done', 'blocked', 'backlog', 'postponed']
 
 export const STATUS_TAG = {
+  todo:          'gray',
   'in-progress': 'blue',
-  published:     'green',
-  planning:      'amber',
-  postponed:     'gray',
-  blocked:       'red',
-  overdue:       'red',
-  scheduled:     'green',
   done:          'green',
+  blocked:       'red',
+  backlog:       'amber',
+  postponed:     'gray',
 }
 
 export const TAG_COLORS = {

@@ -49,11 +49,22 @@ const s = {
 }
 
 export default function ProjectDrawer({ project, onSave, onClose }) {
+  const getInitialDueDate = (value) => {
+    if (!value) return ''
+    if (/^\d{4}-\d{2}-\d{2}$/.test(value)) return value
+    const parsed = new Date(value)
+    if (Number.isNaN(parsed.getTime())) return ''
+    const year = parsed.getFullYear()
+    const month = String(parsed.getMonth() + 1).padStart(2, '0')
+    const day = String(parsed.getDate()).padStart(2, '0')
+    return `${year}-${month}-${day}`
+  }
+
   const [name, setName]     = useState(project?.name || '')
-  const [status, setStatus] = useState(project?.status || 'planning')
+  const [status, setStatus] = useState(project?.status || 'todo')
   const [prog, setProg]     = useState(project?.prog ?? 0)
   const [next, setNext]     = useState(project?.next || '')
-  const [due, setDue]       = useState(project?.due || '')
+  const [due, setDue]       = useState(getInitialDueDate(project?.due))
 
   useEffect(() => {
     const handler = (e) => { if (e.key === 'Escape') onClose() }
@@ -63,7 +74,7 @@ export default function ProjectDrawer({ project, onSave, onClose }) {
 
   const handleSave = () => {
     if (!name.trim()) return
-    onSave({ name: name.trim(), status, prog: Number(prog), next: next.trim(), due: due.trim() })
+    onSave({ name: name.trim(), status, prog: Number(prog), next: next.trim(), due: due || '' })
   }
 
   return (
@@ -102,8 +113,12 @@ export default function ProjectDrawer({ project, onSave, onClose }) {
             </div>
             <div style={s.field}>
               <div style={s.label}>Due date</div>
-              <input style={s.input} value={due} onChange={e => setDue(e.target.value)}
-                placeholder="e.g. Apr 13, TBD, Ongoing" />
+              <input
+                type="date"
+                style={s.input}
+                value={due}
+                onChange={e => setDue(e.target.value)}
+              />
             </div>
           </div>
           <div style={s.footer}>

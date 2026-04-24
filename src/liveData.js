@@ -9,32 +9,89 @@ import {
 
 const REFRESH_MS = Number(import.meta.env.VITE_WEBHOOK_POLL_MS || 24 * 60 * 60 * 1000)
 
+function normalizeName(name) {
+  return String(name || '').trim().toLowerCase()
+}
+
+function logDeletedProject(project, deletedBy) {
+  return {
+    id: Date.now() + Math.random(),
+    deletedAt: new Date().toISOString(),
+    deletedBy,
+    project,
+  }
+}
+
 function sanitizeProjects(projects) {
   if (!Array.isArray(projects)) return INITIAL_PROJECTS
   return projects.map((p, idx) => ({
     id: p.id ?? Date.now() + idx,
     name: p.name ?? `Project ${idx + 1}`,
     color: p.color ?? '#185FA5',
-    status: p.status ?? 'planning',
+    status: p.status ?? 'todo',
     prog: Number.isFinite(p.prog) ? p.prog : 0,
     next: p.next ?? '',
     due: p.due ?? 'TBD',
+    subtasks: Array.isArray(p.subtasks)
+      ? p.subtasks.map((s, sIdx) => ({
+        id: s.id ?? Date.now() + sIdx,
+        title: s.title ?? `Subtask ${sIdx + 1}`,
+        status: s.status === 'done' ? 'done' : 'todo',
+      }))
+      : [],
   }))
 }
 
-function mergeProjectsByName(existingProjects, incomingProjects) {
+function hasProjectChanged(existingProject, incomingProject) {
+  const a = JSON.stringify({
+    name: existingProject.name,
+    color: existingProject.color,
+    status: existingProject.status,
+    prog: existingProject.prog,
+    next: existingProject.next,
+    due: existingProject.due,
+    subtasks: existingProject.subtasks || [],
+  })
+  const b = JSON.stringify({
+    name: incomingProject.name,
+    color: incomingProject.color,
+    status: incomingProject.status,
+    prog: incomingProject.prog,
+    next: incomingProject.next,
+    due: incomingProject.due,
+    subtasks: incomingProject.subtasks || [],
+  })
+  return a !== b
+}
+
+function reconcileProjectsFromWebhook(existingProjects, incomingProjects) {
   const existing = Array.isArray(existingProjects) ? existingProjects : []
   const incoming = Array.isArray(incomingProjects) ? incomingProjects : []
-  const existingNames = new Set(
-    existing.map((project) => String(project.name || '').trim().toLowerCase()),
-  )
+  const existingByName = new Map(existing.map((project) => [normalizeName(project.name), project]))
+  const incomingByName = new Map(incoming.map((project) => [normalizeName(project.name), project]))
 
-  const newProjects = incoming.filter((project) => {
-    const nameKey = String(project.name || '').trim().toLowerCase()
-    return nameKey && !existingNames.has(nameKey)
+  const nextProjects = []
+  const deletedLogs = []
+
+  incoming.forEach((incomingProject) => {
+    const key = normalizeName(incomingProject.name)
+    const existingProject = existingByName.get(key)
+
+    if (existingProject && hasProjectChanged(existingProject, incomingProject)) {
+      deletedLogs.push(logDeletedProject(existingProject, 'api'))
+    }
+
+    nextProjects.push(existingProject ? { ...incomingProject, id: existingProject.id } : incomingProject)
   })
 
-  return [...existing, ...newProjects]
+  existing.forEach((existingProject) => {
+    const key = normalizeName(existingProject.name)
+    if (!incomingByName.has(key)) {
+      deletedLogs.push(logDeletedProject(existingProject, 'api'))
+    }
+  })
+
+  return { nextProjects, deletedLogs }
 }
 
 function sanitizeCampaigns(campaigns) {
@@ -75,6 +132,7 @@ function sanitizeCalendarEvents(events) {
 
 const fallbackData = {
   projects: INITIAL_PROJECTS,
+  deletedProjects: [],
   campaigns: INITIAL_CAMPAIGNS,
   timelineRows: TIMELINE_ROWS,
   calendarEvents: CALENDAR_EVENTS,
@@ -104,12 +162,22 @@ export function useLiveData() {
       if (!res.ok) throw new Error(`Webhook request failed (${res.status})`)
 
       const payload = await res.json()
-      const incomingProjects = Array.isArray(payload.projects)
-        ? sanitizeProjects(payload.projects)
-        : []
-
+      const hasProjects = Array.isArray(payload.projects)
+      const incomingProjects = hasProjects ? sanitizeProjects(payload.projects) : []
       setData((prev) => ({
-        projects: mergeProjectsByName(prev.projects, incomingProjects),
+        ...(() => {
+          if (!hasProjects) {
+            return {
+              projects: prev.projects,
+              deletedProjects: prev.deletedProjects || [],
+            }
+          }
+          const { nextProjects, deletedLogs } = reconcileProjectsFromWebhook(prev.projects, incomingProjects)
+          return {
+            projects: nextProjects,
+            deletedProjects: [...(prev.deletedProjects || []), ...deletedLogs],
+          }
+        })(),
         campaigns: sanitizeCampaigns(payload.campaigns),
         timelineRows: sanitizeTimelineRows(payload.timelineRows),
         calendarEvents: sanitizeCalendarEvents(payload.calendarEvents),

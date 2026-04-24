@@ -2,7 +2,7 @@ import { useState } from 'react'
 import Sidebar from './components/Sidebar.jsx'
 import OverviewPanel from './components/OverviewPanel.jsx'
 import CampaignsPanel from './components/CampaignsPanel.jsx'
-import { TimelinePanel, CalendarPanel } from './components/Panels.jsx'
+import { TimelinePanel, CalendarPanel, TrashPanel } from './components/Panels.jsx'
 import ChatDrawer from './components/ChatDrawer.jsx'
 import { useLiveData } from './liveData.js'
 
@@ -25,13 +25,47 @@ export default function App() {
     }))
   }
 
+  const handleDeleteProject = (project, deletedBy = 'user') => {
+    setData((prev) => ({
+      ...prev,
+      projects: prev.projects.filter((p) => p.id !== project.id),
+      deletedProjects: [
+        ...(prev.deletedProjects || []),
+        {
+          id: Date.now() + Math.random(),
+          deletedAt: new Date().toISOString(),
+          deletedBy,
+          project,
+        },
+      ],
+    }))
+  }
+
+  const handleRestoreProject = (trashEntryId) => {
+    setData((prev) => {
+      const entry = (prev.deletedProjects || []).find((item) => item.id === trashEntryId)
+      if (!entry) return prev
+      return {
+        ...prev,
+        projects: [...prev.projects, entry.project],
+        deletedProjects: prev.deletedProjects.filter((item) => item.id !== trashEntryId),
+      }
+    })
+  }
+
+  const handleEmptyTrash = () => {
+    if (!window.confirm('Permanently delete all items in Trash? This cannot be undone.')) return
+    setData((prev) => ({ ...prev, deletedProjects: [] }))
+  }
+
   const nowLabel = new Date().toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })
 
   const panels = {
-    overview:  <OverviewPanel projects={data.projects} setProjects={setProjects} />,
+    overview:  <OverviewPanel projects={data.projects} setProjects={setProjects} onDeleteProject={handleDeleteProject} />,
     campaigns: <CampaignsPanel campaigns={data.campaigns} setCampaigns={setCampaigns} onConfirm={() => setView('overview')} />,
     timeline:  <TimelinePanel rows={data.timelineRows} />,
     calendar:  <CalendarPanel events={data.calendarEvents} />,
+    trash: <TrashPanel deletedProjects={data.deletedProjects} onRestoreProject={handleRestoreProject} onEmptyTrash={handleEmptyTrash} />,
   }
 
   return (
@@ -68,7 +102,7 @@ export default function App() {
 
         {/* BODY */}
         <div style={{ display: 'flex', flex: 1, minHeight: 0, overflow: 'hidden' }}>
-          <Sidebar view={view} setView={setView} />
+          <Sidebar view={view} setView={setView} trashCount={data.deletedProjects?.length || 0} />
           <main style={{ flex: 1, overflowY: 'auto', padding: '20px 24px', background: 'var(--bg)', minWidth: 0 }}>
             {panels[view]}
           </main>
