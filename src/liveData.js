@@ -7,7 +7,7 @@ import {
   SYSTEM_PROMPT,
 } from './data.js'
 
-const REFRESH_MS = Number(import.meta.env.VITE_WEBHOOK_POLL_MS || 15000)
+const REFRESH_MS = Number(import.meta.env.VITE_WEBHOOK_POLL_MS || 24 * 60 * 60 * 1000)
 
 function sanitizeProjects(projects) {
   if (!Array.isArray(projects)) return INITIAL_PROJECTS
@@ -20,6 +20,21 @@ function sanitizeProjects(projects) {
     next: p.next ?? '',
     due: p.due ?? 'TBD',
   }))
+}
+
+function mergeProjectsByName(existingProjects, incomingProjects) {
+  const existing = Array.isArray(existingProjects) ? existingProjects : []
+  const incoming = Array.isArray(incomingProjects) ? incomingProjects : []
+  const existingNames = new Set(
+    existing.map((project) => String(project.name || '').trim().toLowerCase()),
+  )
+
+  const newProjects = incoming.filter((project) => {
+    const nameKey = String(project.name || '').trim().toLowerCase()
+    return nameKey && !existingNames.has(nameKey)
+  })
+
+  return [...existing, ...newProjects]
 }
 
 function sanitizeCampaigns(campaigns) {
@@ -89,13 +104,17 @@ export function useLiveData() {
       if (!res.ok) throw new Error(`Webhook request failed (${res.status})`)
 
       const payload = await res.json()
-      setData({
-        projects: sanitizeProjects(payload.projects),
+      const incomingProjects = Array.isArray(payload.projects)
+        ? sanitizeProjects(payload.projects)
+        : []
+
+      setData((prev) => ({
+        projects: mergeProjectsByName(prev.projects, incomingProjects),
         campaigns: sanitizeCampaigns(payload.campaigns),
         timelineRows: sanitizeTimelineRows(payload.timelineRows),
         calendarEvents: sanitizeCalendarEvents(payload.calendarEvents),
         systemPrompt: payload.systemPrompt || SYSTEM_PROMPT,
-      })
+      }))
       setError('')
       setLastSync(new Date())
     } catch (err) {
